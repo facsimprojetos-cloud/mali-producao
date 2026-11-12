@@ -1,0 +1,96 @@
+import { db, tem } from '../app.js';
+import { h, moeda, chip, modal, ler, toast, msgErro, limparCache, formDados, confirmar } from '../util.js';
+
+const TABELAS = {
+  produtos: { nome: 'Produtos', ordem: 'nome', campos: [
+    { k: 'nome', r: 'Produto', req: true }, { k: 'codigo', r: 'Código' },
+    { k: 'valor_faccao', r: 'Valor pago à facção por peça (R$)', tipo: 'number' }, { k: 'preco', r: 'Preço de venda (R$)', tipo: 'number' },
+    { k: 'estamparia_apos', r: 'Vai para estamparia depois da produção', tipo: 'bool' }, { k: 'foto_url', r: 'Link da foto' }, { k: 'obs', r: 'Observação' },
+  ], colunas: (x) => [h(x.codigo || ''), h(x.nome), x.valor_faccao != null ? moeda(x.valor_faccao) : '—', x.preco != null ? moeda(x.preco) : '—', x.estamparia_apos ? chip('Estampa após', 'acento') : ''],
+    cab: ['Código', 'Produto', 'R$ facção', 'Preço', ''] },
+  clientes: { nome: 'Clientes', ordem: 'nome', perfil: 'comercial', campos: [
+    { k: 'nome', r: 'Cliente', req: true }, { k: 'telefone', r: 'Telefone' }, { k: 'documento', r: 'CPF/CNPJ' }, { k: 'obs', r: 'Observação' },
+  ], colunas: (x) => [h(x.nome), h(x.telefone || ''), h(x.documento || '')], cab: ['Cliente', 'Telefone', 'Documento'] },
+  faccoes: { nome: 'Facções', ordem: 'nome', campos: [
+    { k: 'nome', r: 'Nome', req: true }, { k: 'numero', r: 'Nº', tipo: 'number' }, { k: 'telefone', r: 'Telefone' }, { k: 'endereco', r: 'Endereço' },
+    { k: 'maquinas', r: 'Máquinas' }, { k: 'pix', r: 'PIX / dados bancários' }, { k: 'capacidade', r: 'Capacidade (peças)', tipo: 'number' },
+    { k: 'interna', r: 'É a produção interna', tipo: 'bool' },
+  ], colunas: (x) => [x.numero ?? '', h(x.nome), h(x.telefone || ''), h(x.maquinas || ''), h(x.pix || ''), x.interna ? chip('Interna', 'info') : ''], cab: ['Nº', 'Nome', 'Telefone', 'Máquinas', 'PIX', ''] },
+  cores: { nome: 'Cores', ordem: 'nome', campos: [{ k: 'nome', r: 'Cor', req: true }], colunas: (x) => [h(x.nome)], cab: ['Cor'] },
+  tamanhos: { nome: 'Tamanhos', ordem: 'ordem', campos: [{ k: 'nome', r: 'Tamanho', req: true }, { k: 'ordem', r: 'Ordem de exibição', tipo: 'number' }],
+    colunas: (x) => [h(x.nome), x.ordem], cab: ['Tamanho', 'Ordem'] },
+  operadores: { nome: 'Operadores', ordem: 'nome', campos: [{ k: 'nome', r: 'Nome', req: true }, { k: 'foto_url', r: 'Link da foto' }],
+    colunas: (x) => [h(x.nome)], cab: ['Nome'] },
+  processos: { nome: 'Operações', ordem: 'nome', campos: [{ k: 'nome', r: 'Operação', req: true }], colunas: (x) => [h(x.nome)], cab: ['Operação'] },
+  motivos_parada: { nome: 'Motivos de parada', ordem: 'nome', campos: [{ k: 'nome', r: 'Motivo', req: true }, { k: 'duracao_min', r: 'Duração prevista (min)', tipo: 'number' },
+    { k: 'produtiva', r: 'Conta como tempo produtivo', tipo: 'bool' }], colunas: (x) => [h(x.nome), x.duracao_min ?? '—', x.produtiva ? 'Sim' : 'Não'], cab: ['Motivo', 'Duração (min)', 'Produtiva'] },
+  materias_primas: { nome: 'Matéria-prima', ordem: 'nome', campos: [
+    { k: 'nome', r: 'Matéria-prima', req: true }, { k: 'tipo', r: 'Tipo', tipo: 'select', opcoes: ['TECIDO', 'AVIAMENTO', 'ACESSÓRIO', 'EMBALAGEM', 'OUTRO'] },
+    { k: 'unidade', r: 'Unidade', tipo: 'select', opcoes: ['KG', 'METRO', 'UNIDADE', 'ROLO', 'PACOTE', 'CONE'] }, { k: 'valor', r: 'Valor por unidade (R$)', tipo: 'number' },
+    { k: 'rendimento', r: 'Rendimento', tipo: 'number' }, { k: 'largura', r: 'Largura (m)', tipo: 'number' }, { k: 'gramatura', r: 'Gramatura', tipo: 'number' }, { k: 'fornecedor', r: 'Fornecedor' },
+  ], colunas: (x) => [h(x.nome), h(x.tipo), h(x.unidade), moeda(x.valor), h(x.fornecedor || '')], cab: ['Matéria-prima', 'Tipo', 'Unid.', 'Valor', 'Fornecedor'] },
+};
+let aba = 'produtos';
+const t_perfil = (a) => TABELAS[a].perfil;
+let mostrarInativos = false;
+
+export async function render(el) {
+  const t = TABELAS[aba], admin = tem('cadastros') || (t_perfil(aba) && tem(t_perfil(aba)));
+  let q = db.from(aba).select('*').order(t.ordem);
+  if (!mostrarInativos) q = q.eq('ativo', true);
+  const lista = await ler(q);
+  el.innerHTML = `
+    <div class="cab"><div><h1>Cadastros</h1><p>${admin ? 'Você pode incluir e alterar cadastros.' : 'Consulta (sem permissão de edição).'}</p></div>
+      ${admin ? `<button class="btn acento" id="novo">+ Novo</button>` : ''}</div>
+    <div class="abas" style="flex-wrap:wrap">${Object.entries(TABELAS).map(([k, v]) => `<button data-a="${k}" class="${aba === k ? 'ativo' : ''}">${v.nome}</button>`).join('')}</div>
+    <label class="peq"><input type="checkbox" id="inat" ${mostrarInativos ? 'checked' : ''}> mostrar inativos</label>
+    <div class="tabela-wrap" style="margin-top:8px"><table><thead><tr>${t.cab.map(c => `<th>${c}</th>`).join('')}<th>Status</th>${admin ? '<th></th>' : ''}</tr></thead>
+      <tbody>${lista.map(x => `<tr>${t.colunas(x).map(c => `<td>${c}</td>`).join('')}<td>${x.ativo ? chip('Ativo', 'ok') : chip('Inativo', 'erro')}</td>
+        ${admin ? `<td><div class="acoes"><button class="btn peq" data-ed="${x.id}">Editar</button><button class="btn peq perigo" data-del="${x.id}">🗑</button></div></td>` : ''}</tr>`).join('') || '<tr><td colspan="9" class="vazio">Nenhum registro.</td></tr>'}</tbody></table></div>`;
+  el.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { aba = b.dataset.a; render(el); });
+  el.querySelector('#inat').onchange = (e) => { mostrarInativos = e.target.checked; render(el); };
+  el.querySelector('#novo')?.addEventListener('click', () => form(null, () => render(el)));
+  el.querySelectorAll('[data-ed]').forEach(b => b.onclick = () => form(lista.find(x => String(x.id) === b.dataset.ed), () => render(el)));
+  el.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    const x = lista.find(r => String(r.id) === b.dataset.del);
+    if (!await confirmar('Excluir cadastro', `Excluir <b>${h(x.nome)}</b> de ${t.nome}?`, 'Excluir', 'perigo')) return;
+    const { error } = await db.from(aba).delete().eq('id', x.id);
+    if (error) {
+      if (/foreign key|violates/i.test(error.message)) toast(`"${x.nome}" já foi usado em lançamentos e não pode ser excluído. Edite e desmarque "Ativo" para escondê-lo.`, 'erro');
+      else toast(msgErro(error), 'erro');
+      return;
+    }
+    limparCache(); toast('Excluído.', 'ok'); render(el);
+  });
+}
+
+function campo(c, v) {
+  const val = v?.[c.k];
+  if (c.tipo === 'select') return `<label class="campo">${c.r}<select name="${c.k}">${c.opcoes.map(o => `<option ${val === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>`;
+  if (c.tipo === 'bool') return `<label class="campo"><input type="checkbox" name="${c.k}" ${val ? 'checked' : ''} style="width:auto;min-height:0"> ${c.r}</label>`;
+  return `<label class="campo">${c.r}<input name="${c.k}" ${c.tipo === 'number' ? 'type="number" step="any"' : ''} value="${h(val ?? '')}" ${c.req ? 'required' : ''}></label>`;
+}
+
+function form(reg, depois) {
+  const t = TABELAS[aba];
+  modal({
+    titulo: `${reg ? 'Editar' : 'Novo'} — ${t.nome}`,
+    corpo: `<form id="fcad" class="grade">${t.campos.map(c => campo(c, reg)).join('')}
+      ${reg ? `<label class="campo"><input type="checkbox" name="ativo" ${reg.ativo ? 'checked' : ''} style="width:auto;min-height:0"> Ativo</label>` : ''}</form>`,
+    botoes: [{ texto: 'Cancelar' }, {
+      texto: 'Salvar', classe: 'pri', acao: async (m) => {
+        const f = m.querySelector('#fcad'); if (!f.reportValidity()) return false;
+        const d = formDados(f), dados = {};
+        t.campos.forEach(c => {
+          if (c.tipo === 'bool') dados[c.k] = f[c.k].checked;
+          else if (c.tipo === 'number') dados[c.k] = d[c.k] === '' ? null : Number(d[c.k]);
+          else dados[c.k] = d[c.k] === '' ? null : d[c.k];
+        });
+        if (reg) dados.ativo = f.ativo.checked;
+        const { error } = reg ? await db.from(aba).update(dados).eq('id', reg.id) : await db.from(aba).insert(dados);
+        if (error) { toast(msgErro(error), 'erro'); return false; }
+        limparCache(); toast('Salvo.', 'ok'); depois();
+      }
+    }]
+  });
+}
