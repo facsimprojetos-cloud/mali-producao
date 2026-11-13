@@ -15,7 +15,7 @@ export async function render(el) {
       <button data-a="abertos" class="${aba === 'abertos' ? 'ativo' : ''}">A pagar</button>
       <button data-a="pagos" class="${aba === 'pagos' ? 'ativo' : ''}">Pagamentos realizados</button>
     </div>
-    <div class="filtros"><label class="campo">Facção<select id="ff">${opcoes(cad.faccoes.filter(f => !f.interna), fFac, 'nome', 'id', aba === 'abertos' ? 'Todas (resumo)' : 'Todas')}</select></label></div>
+    <div class="filtros"><label class="campo">Facção<select id="ff">${opcoes(cad.faccoes, fFac, 'nome', 'id', aba === 'abertos' ? 'Todas (resumo)' : 'Todas')}</select></label></div>
     <div id="alvo"></div>`;
   el.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { aba = b.dataset.a; marcados.clear(); render(el); });
   el.querySelector('#ff').onchange = (e) => { fFac = e.target.value; marcados.clear(); render(el); };

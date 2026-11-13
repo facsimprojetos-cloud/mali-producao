@@ -97,7 +97,7 @@ function formRetorno(e, cad, depois) {
         <label class="campo">Data do retorno<input type="date" name="data" value="${hojeISO()}" max="${hojeISO()}"></label>
         <label class="campo" style="grid-column:1/-1">Observação<input name="obs"></label>
       </form>
-      ${!e.interna ? `<p class="muted peq">Valor a pagar: peças boas × ${moeda(e.valor_unit)}. As peças com defeito voltam para a mesma facção e são pagas quando retornarem consertadas.</p>` : ''}`,
+      ${e.valor_unit > 0 ? `<p class="muted peq">Valor a pagar: peças boas × ${moeda(e.valor_unit)}. As peças com defeito voltam para a mesma facção e são pagas quando retornarem consertadas.</p>` : ''}`,
     botoes: [{ texto: 'Cancelar' }, { texto: 'Registrar', classe: 'pri', acao: async (m) => {
       const f = m.querySelector('#fr'); if (!f.reportValidity()) return false;
       const qtd = +f.qtd.value, def = +f.def.value || 0;

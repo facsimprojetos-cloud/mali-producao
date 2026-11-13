@@ -89,10 +89,10 @@ async function telaEnvio(itens, depois) {
     aoAbrir: (m) => {
       const atualizar = () => {
         const fac = cad.faccoes.find(f => f.id === +m.querySelector('#fac').value);
-        m.querySelector('#aviso-int').textContent = fac?.interna ? 'Produção interna: o valor por peça não é cobrado; o lote aparece em Produção Interna para apontamento.' : '';
+        m.querySelector('#aviso-int').textContent = fac?.interna ? 'Produção interna: o lote também aparece em Produção Interna para apontamento.' : '';
         let tq = 0, tv = 0;
         m.querySelectorAll('tbody tr').forEach(tr => {
-          const q = +tr.querySelector('[data-campo=qtd]').value || 0, v = fac?.interna ? 0 : +(tr.querySelector('[data-campo=v]').value || 0);
+          const q = +tr.querySelector('[data-campo=qtd]').value || 0, v = +(tr.querySelector('[data-campo=v]').value || 0);
           tr.querySelector('[data-total]').textContent = moeda(q * v); tq += q; tv += q * v;
         });
         m.querySelector('#tq').textContent = num(tq); m.querySelector('#tv').textContent = moeda(tv);
